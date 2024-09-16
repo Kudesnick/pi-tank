@@ -9,7 +9,7 @@ PWM_LEFT=0
 PWM_RIGHT=1
 
 pwm_duty {
-    echo $(${PWM_PERIOD} / 100 * $2) > "${PWM}/pwm$1/duty_cycle"
+    echo $(( ${PWM_PERIOD} / 100 * $2 )) > "${PWM}/pwm$1/duty_cycle"
 }
 
 pwm_export {
@@ -27,10 +27,10 @@ pwm_unexport {
 # gpio as sysfs
 
 GPIO="/sys/class/gpio"
-GPIO_L_FORWARD=17
-GPIO_L_BACK=18
-GPIO_R_FORWARD=22
-GPIO_R_BACK=23
+GPIO_LEFT_FORWARD=17
+GPIO_LEFT_BACK=18
+GPIO_RIGHT_FORWARD=22
+GPIO_RIGHT_BACK=23
 HI=1
 LOW=0
 
@@ -52,48 +52,78 @@ gpio_unexport {
     echo $1 > "${GPIO}/unexport"
 }
 
+# H-bridge
+
+H_LEFT="LEFT"
+H_RIGHT="RIGHT"
+
+function bridge_export {
+    pwm_export ${PWM_$1} 0
+    gpio_export ${GPIO_$1_FORWARD}
+    gpio_export ${GPIO_$1_BACK}
+}
+
+function bridge_unexport {
+    pwm_unexport ${PWM_$1}
+    gpio_unexport ${GPIO_$1_FORWARD}
+    gpio_unexport ${GPIO_$1_BACK}
+}
+
+bridge_stop {
+    pwm_duty ${PWM_$1} 0
+    gpio_reset ${GPIO_$1_FORWARD}
+    gpio_reset ${GPIO_$1_BACK}
+    pwm_duty ${PWM_$1} $2
+}
+
+bridge_forward {
+    pwm_duty ${PWM_$1} 0
+    gpio_set ${GPIO_$1_FORWARD}
+    gpio_reset ${GPIO_$1_BACK}
+    pwm_duty ${PWM_$1} $2
+}
+
+bridge_back {
+    pwm_duty ${PWM_$1} 0
+    gpio_reset ${GPIO_$1_FORWARD}
+    gpio_set ${GPIO_$1_BACK}
+    pwm_duty ${PWM_$1} $2
+}
+
 # main
 
 DELAY=4
 
-gpio_export $GPIO_L_FORWARD
-gpio_export $GPIO_L_BACK
-gpio_export $GPIO_R_FORWARD
-gpio_export $GPIO_R_BACK
+bridge_export ${H_LEFT}
+bridge_export ${H_RIGHT}
 
-pwm_export $PWM_LEFT 20
-pwm_export $PWM_RIGHT 20
-
-gpio_set $GPIO_L_FORWARD
+bridge_back ${H_LEFT} 20
 sleep ${DELAY}
 
-gpio_set $GPIO_R_FORWARD
+bridge_back ${H_RIGHT} 20
 sleep ${DELAY}
 
-gpio_reset $GPIO_L_FORWARD
-gpio_set $GPIO_L_BACK
+bridge_forward ${H_LEFT} 20
 sleep ${DELAY}
 
-gpio_reset $GPIO_R_FORWARD
-gpio_set $GPIO_R_BACK
+bridge_forward ${H_RIGHT} 20
 sleep ${DELAY}
 
-pwm_duty $PWM_LEFT 50
-pwm_duty $PWM_RIGHT 50
+bridge_forward ${H_LEFT} 50
+bridge_forward ${H_RIGHT} 50
 sleep ${DELAY}
 
-pwm_duty $PWM_LEFT 100
-pwm_duty $PWM_RIGHT 100
+bridge_forward ${H_LEFT} 100
+bridge_forward ${H_RIGHT} 100
 sleep ${DELAY}
 
-pwm_duty $PWM_LEFT 0
-pwm_duty $PWM_RIGHT 0
+bridge_forward ${H_LEFT} 20
+bridge_forward ${H_RIGHT} 20
 sleep ${DELAY}
 
-gpio_unexport $GPIO_L_FORWARD
-gpio_unexport $GPIO_L_BACK
-gpio_unexport $GPIO_R_FORWARD
-gpio_unexport $GPIO_R_BACK
+bridge_stop ${H_LEFT} 50
+bridge_stop ${H_RIGHT} 50
+sleep ${DELAY}
 
-pwm_unexport $PWM_LEFT
-pwm_unexport $PWM_RIGHT
+bridge_unexport ${H_LEFT}
+bridge_unexport ${H_RIGHT}

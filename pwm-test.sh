@@ -1,43 +1,99 @@
 #!/bin/bash -e
 
+# pwm as sysfs
+
 PWM="/sys/class/pwm/pwmchip0"
-PWM0="${PWM}/pwm0"
-PWM1="${PWM}/pwm1"
 
-gpioset --drive=push-pull 0 17=0 18=0 22=0 23=0
+PWM_PERIOD=50000000
+PWM_LEFT=0
+PWM_RIGHT=1
 
-echo 0 > "${PWM}/export"
-echo 50000000 > "${PWM0}/period"
-echo 10000000 > "${PWM0}/duty_cycle"
-echo 1 > "${PWM0}/enable"
+pwm_duty {
+    echo $(${PWM_PERIOD} / 100 * $2) > "${PWM}/pwm$1/duty_cycle"
+}
 
-echo 1 > "${PWM}/export"
-echo 50000000 > "${PWM1}/period"
-echo 10000000 > "${PWM1}/duty_cycle"
-echo 1 > "${PWM1}/enable"
+pwm_export {
+    test -d "${PWM}/pwm$1" || echo $1 > "${PWM}/export"
+    echo ${PWM_PERIOD} > "${PWM}/pwm$1/period"
+    pwm_duty $1 $2
+    echo 1 > "${PWM}/pwm$1/enable"
+}
 
-gpioset 0 17=0 18=1
-sleep 5
+pwm_unexport {
+    echo 0 > "${PWM}/pwm$1/enable"
+    echo $1 > "${PWM}/unexport"
+}
 
-gpioset 0 22=0 23=1
-sleep 5
+# gpio as sysfs
 
-gpioset 0 17=1 18=0
-sleep 5
+GPIO="/sys/class/gpio"
+GPIO_L_FORWARD=17
+GPIO_L_BACK=18
+GPIO_R_FORWARD=22
+GPIO_R_BACK=23
+HI=1
+LOW=0
 
-gpioset 0 22=1 23=0
-sleep 5
+gpio_set {
+    echo ${HI} > ${GPIO}/gpio$1/value
+}
 
-echo 25000000 > "${PWM0}/duty_cycle"
-echo 25000000 > "${PWM1}/duty_cycle"
-sleep 5
+gpio_reset {
+    echo ${LOW} > ${GPIO}/gpio$1/value
+}
 
-echo 50000000 > "${PWM0}/duty_cycle"
-echo 50000000 > "${PWM1}/duty_cycle"
-sleep 5
+gpio_export {
+    test -d "${GPIO}/gpio$1" || echo $1 > "${GPIO}/export"
+    echo out > ${GPIO}/gpio$1/direction
+    gpio_reset $1
+}
 
-echo 0 > "${PWM0}/enable"
-echo 0 > "${PWM1}/enable"
-sleep 5
+gpio_unexport {
+    echo $1 > "${GPIO}/unexport"
+}
 
-gpioset 0 17=0 18=0 22=0 23=0
+# main
+
+DELAY=4
+
+gpio_export $GPIO_L_FORWARD
+gpio_export $GPIO_L_BACK
+gpio_export $GPIO_R_FORWARD
+gpio_export $GPIO_R_BACK
+
+pwm_export $PWM_LEFT 20
+pwm_export $PWM_RIGHT 20
+
+gpio_set $GPIO_L_FORWARD
+sleep ${DELAY}
+
+gpio_set $GPIO_R_FORWARD
+sleep ${DELAY}
+
+gpio_reset $GPIO_L_FORWARD
+gpio_set $GPIO_L_BACK
+sleep ${DELAY}
+
+gpio_reset $GPIO_R_FORWARD
+gpio_set $GPIO_R_BACK
+sleep ${DELAY}
+
+pwm_duty $PWM_LEFT 50
+pwm_duty $PWM_RIGHT 50
+sleep ${DELAY}
+
+pwm_duty $PWM_LEFT 100
+pwm_duty $PWM_RIGHT 100
+sleep ${DELAY}
+
+pwm_duty $PWM_LEFT 0
+pwm_duty $PWM_RIGHT 0
+sleep ${DELAY}
+
+gpio_unexport $GPIO_L_FORWARD
+gpio_unexport $GPIO_L_BACK
+gpio_unexport $GPIO_R_FORWARD
+gpio_unexport $GPIO_R_BACK
+
+pwm_unexport $PWM_LEFT
+pwm_unexport $PWM_RIGHT

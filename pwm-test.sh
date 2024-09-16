@@ -5,11 +5,12 @@
 PWM="/sys/class/pwm/pwmchip0"
 
 PWM_PERIOD=50000000
+PWM_DIMENSION=100
 PWM_LEFT=0
 PWM_RIGHT=1
 
 function pwm_duty {
-    echo $(( ${PWM_PERIOD} / 100 * $2 )) > "${PWM}/pwm$1/duty_cycle"
+    echo $(( ${PWM_PERIOD} / ${PWM_DIMENSION} * $2 )) > "${PWM}/pwm$1/duty_cycle"
 }
 
 function pwm_export {
@@ -54,9 +55,6 @@ function gpio_unexport {
 
 # H-bridge
 
-H_LEFT="LEFT"
-H_RIGHT="RIGHT"
-
 function bridge_export {
     pwm_export $(eval echo "\$PWM_$1") 0
     gpio_export $(eval echo "\$GPIO_$1_FORWARD")
@@ -94,35 +92,35 @@ function bridge_back {
 
 DELAY=4
 
-bridge_export ${H_LEFT}
-bridge_export ${H_RIGHT}
+bridge_export "LEFT"
+bridge_export "RIGHT"
 
-bridge_back ${H_LEFT} 20
+bridge_back "LEFT" 20
 sleep ${DELAY}
 
-bridge_back ${H_RIGHT} 20
+bridge_back "RIGHT" 20
 sleep ${DELAY}
 
-bridge_forward ${H_LEFT} 20
+bridge_forward "LEFT" 20
 sleep ${DELAY}
 
-bridge_forward ${H_RIGHT} 20
+bridge_forward "RIGHT" 20
 sleep ${DELAY}
 
-bridge_forward ${H_LEFT} 50
-bridge_forward ${H_RIGHT} 50
+bridge_forward "LEFT" 50
+bridge_forward "RIGHT" 50
 sleep ${DELAY}
 
-bridge_forward ${H_LEFT} 100
-bridge_forward ${H_RIGHT} 100
+bridge_forward "LEFT" 100
+bridge_forward "RIGHT" 100
 sleep ${DELAY}
 
-bridge_forward ${H_LEFT} 20
-bridge_forward ${H_RIGHT} 20
+bridge_forward "LEFT" 20
+bridge_forward "RIGHT" 20
 sleep ${DELAY}
 
-bridge_stop ${H_LEFT} 50
-bridge_stop ${H_RIGHT} 50
+bridge_stop "LEFT" 50
+bridge_stop "RIGHT" 50
 sleep ${DELAY}
 
 bridge_unexport ${H_LEFT}

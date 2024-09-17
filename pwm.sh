@@ -4,8 +4,8 @@
 
 PWM="/sys/class/pwm/pwmchip0"
 
-PWM_PERIOD=50000000
-PWM_DIMENSION=100
+PWM_PERIOD=25000000
+PWM_DIMENSION=128
 PWM_LEFT=0
 PWM_RIGHT=1
 
@@ -88,9 +88,10 @@ function bridge_back {
     pwm_duty $(eval echo "\$PWM_$1") $2
 }
 
-# main
+<< 'DEMO'
 
 DELAY=4
+PWM_DIMENSION=128
 
 bridge_export "LEFT"
 bridge_export "RIGHT"
@@ -125,3 +126,5 @@ sleep ${DELAY}
 
 bridge_unexport ${H_LEFT}
 bridge_unexport ${H_RIGHT}
+
+DEMO

@@ -1,6 +1,12 @@
 #!/bin/bash -e
 
-FILTER_ABS=(Y Z RY RZ)
+DEBUG=0
+
+function dbg {
+	test $DEBUG -ne 0 && echo $1
+}
+
+FILTER_ABS=(Y Z RX RY RZ)
 FILTER_BTN=(SELECT START)
 
 MODE=0
@@ -11,64 +17,68 @@ ABS_RZ=0
 
 source ./pwm.sh
 
-function action_ABS_Z {
-	echo "ABS_Z=${ABS_Z}"
-	if [ $ABS_Z -eq 0 ]; then
-		action_ABS_Y
+function brake {
+		dbg "stop $1 $(( $2 / 2 + 1))"
+		bridge_stop "$1" $(( $2 / 2 + 1))
+}
+
+function drive_single {
+	if [ $2 -eq 128 ]; then
+		dbg "stop $1 0"
+		bridge_stop "$1" 0
+	elif [ $2 -gt 128 ]; then
+		dbg "back $1 $(( $2 - 127 ))"
+		bridge_back "$1" $(( $2 - 127 ))
 	else
-		echo "stop LEFT $(( $ABS_Z / 2 + 1))"
-		bridge_stop "LEFT" $(( $ABS_Z / 2 + 1))
+		dbg "forward $1 $(( 128 - $2 ))"
+		bridge_forward "$1" $(( 128 - $2 ))
 	fi
 }
 
-function action_ABS_RZ {
-	echo "ABS_RZ=${ABS_RZ}"
-	if [ $ABS_RZ -eq 0 ]; then
-		action_ABS_RY
-	else
-		echo "stop RIGHT $(( $ABS_RZ / 2 + 1))"
-		bridge_stop "RIGHT" $(( $ABS_RZ / 2 + 1))
+function drive_smart {
+	if [ $ABS_RX -ne 128 ]; then
+		drive_single "LEFT" $(( $ABS_RX - 127 ))
+		drive_single "RIGHT" $(( 128 - $ABS_RX ))
 	fi
 }
 
-function action_ABS_Y {
-	echo "ABS_Y=${ABS_Y}"
-	test $ABS_Z -ne 0 && return 
-	if [ $ABS_Y -eq 128 ]; then
-		echo "stop LEFT 0"
-		bridge_stop "LEFT" 0
-	elif [ $ABS_Y -gt 128 ]; then
-		echo "back LEFT $(( $ABS_Y - 127 ))"
-		bridge_back "LEFT" $(( $ABS_Y - 127 ))
-	else
-		echo "forward LEFT $(( 128 - $ABS_Y ))"
-		bridge_forward "LEFT" $(( 128 - $ABS_Y ))
-	fi
+function drive {
+	if [ $MODE -eq 0 ]; then drive_single $1 $2; else drive_smart: fi
 }
 
-function action_ABS_RY {
-	echo "ABS_RY=${ABS_RY}"
-	test $ABS_RZ -ne 0 && return
-	if [ $ABS_RY -eq 128 ]; then
-		echo "stop RIGHT 0"
-		bridge_stop "RIGHT" 0
-	elif [ $ABS_RY -gt 128 ]; then
-		echo "back RIGHT $(( $ABS_RY - 127 ))"
-		bridge_back "RIGHT" $(( $ABS_RY - 127 ))
-	else
-		echo "forward RIGHT $(( 128 - $ABS_RY ))"
-		bridge_forward "RIGHT" $(( 128 - $ABS_RY ))
-	fi
+function action_BTN_SELECT {
+	MODE=$(( $MODE ^ 1 ))
+	dbg "MODE=${MODE}"
 }
 
 function action_BTN_START {
-	echo "BTN_START=${BTN_START}"
-	exit 0
+	shutdown -h now
+}
+
+function action_ABS_Z {
+	if [ $ABS_Z -eq 0 ]; then action_ABS_Y; else brake "LEFT" $ABS_Z; fi
+}
+
+function action_ABS_RZ {
+	if [ $ABS_RZ -eq 0 ]; then action_ABS_RY; else brake "RIGHT" $ABS_RZ; fi
+}
+
+function action_ABS_Y {
+	if [ $ABS_Z -eq 0 ]; then drive "LEFT" $ABS_Y; fi
+}
+
+function action_ABS_RX {
+	if [ $ABS_RZ -eq 0 ] && [ $MODE -ne 0 ]; then drive; fi
+}
+
+function action_ABS_RY {
+	if [ $ABS_RZ -eq 0 ] && [ $MODE -eq 0 ]; then drive "RIGHT" $ABS_RY; fi
 }
 
 function action {
 	while read -r DATA; do
 		eval $DATA
+		dbg $DATA
 		action_${DATA%%=*} || true
 	done
 }

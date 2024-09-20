@@ -98,7 +98,7 @@ done
 bridge_export "LEFT"
 bridge_export "RIGHT"
 
-evtest /dev/input/event2 |\
+evtest /dev/input/event3 |\
 	grep --line-buffered ${GREP_CHAIN} |\
         grep --line-buffered -o -P '\((ABS|BTN)_[A-Z0-9]+\), value [0-9]+$' |\
 	sed -u -e "s/), value /=/" -e "s/(//" | action

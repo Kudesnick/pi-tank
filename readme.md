@@ -22,8 +22,15 @@ sudo adduser <username> fuse
 
 ### use
 
+mount:
+
 ~~~
 sshfs -o allow_other,default_permissions,IdentityFile=~/.ssh/pi_rsa,reconnect pi@192.168.1.xx:/ ~/mnt_ssh
+~~~
+
+unmount:
+
+~~~
 fusermount -u ~/mnt_ssh
 ~~~
 

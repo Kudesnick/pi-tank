@@ -1,53 +1,59 @@
 #!/bin/bash -e
 
-DEBUG=0
+export DEBUG=1
 
 function dbg {
 	test $DEBUG -ne 0 && echo $1
 }
 
-FILTER_ABS=(Y Z RX RY RZ)
+FILTER_ABS=(Y Z RX RY RZ HAT1X HAT2X HAT3X HAT0Y HAT1Y)
 FILTER_BTN=(SELECT START)
 
+# zero point
+export ZP=128
+
 MODE=0
-ABS_Y=128
+ABS_Y=$ZP
 ABS_Z=0
-ABS_RY=128
+ABS_RY=$ZP
 ABS_RZ=0
 
 source ./pwm.sh
 
 function brake {
-		dbg "stop $1 $(( $2 / 2 + 1))"
-		bridge_stop "$1" $(( $2 / 2 + 1))
+	dbg "stop $1 $(( $2 / 2 + 1))"
+	bridge_stop "$1" $(( $2 / 2 + 1))
 }
 
 function drive_single {
-	if [ $2 -eq 128 ]; then
-		dbg "stop $1 0"
-		bridge_stop "$1" 0
-	elif [ $2 -gt 128 ]; then
-		dbg "back $1 $(( $2 - 127 ))"
-		bridge_back "$1" $(( $2 - 127 ))
-	else
-		dbg "forward $1 $(( 128 - $2 ))"
-		bridge_forward "$1" $(( 128 - $2 ))
-	fi
+	dbg "bridge_drive $1 $2"
+	bridge_drive $1 $2
+}
+
+function normal {
+	echo $(($ZP - $1))
+}
+
+function calibr {
+	if [ $1 -lt $((0 - $ZP)) ]; then echo $((0 - $ZP))
+	elif [ $1 -gt $ZP ]; then echo $ZP
+	else echo $1; fi
 }
 
 function drive_smart {
-	if [ $ABS_RX -ne 128 ]; then
-		drive_single "LEFT" $(( $ABS_RX - 127 ))
-		drive_single "RIGHT" $(( 128 - $ABS_RX ))
-	fi
+	local S=$(normal $ABS_Y)
+	local T=$(normal $ABS_RX)
+
+	bridge_drive "LEFT" $(calibr $(($S - $T)) )
+	bridge_drive "RIGHT" $(calibr $(($S + $T)) )
 }
 
 function drive {
-	if [ $MODE -eq 0 ]; then drive_single $1 $2; else drive_smart: fi
+	[ $MODE -eq 0 ] && drive_single $1 $(normal $2) || drive_smart
 }
 
 function action_BTN_SELECT {
-	MODE=$(( $MODE ^ 1 ))
+	MODE=$(($MODE ^ $BTN_SELECT))
 	dbg "MODE=${MODE}"
 }
 
@@ -56,11 +62,11 @@ function action_BTN_START {
 }
 
 function action_ABS_Z {
-	if [ $ABS_Z -eq 0 ]; then action_ABS_Y; else brake "LEFT" $ABS_Z; fi
+	if [ $ABS_Z -eq 0 ]; then drive "LEFT" $ABS_Y; else brake "LEFT" $ABS_Z; fi
 }
 
 function action_ABS_RZ {
-	if [ $ABS_RZ -eq 0 ]; then action_ABS_RY; else brake "RIGHT" $ABS_RZ; fi
+	if [ $ABS_RZ -eq 0 ]; then drive "RIGHT" $ABS_RY; else brake "RIGHT" $ABS_RZ; fi
 }
 
 function action_ABS_Y {
@@ -73,6 +79,36 @@ function action_ABS_RX {
 
 function action_ABS_RY {
 	if [ $ABS_RZ -eq 0 ] && [ $MODE -eq 0 ]; then drive "RIGHT" $ABS_RY; fi
+}
+
+function action_ABS_HAT1X {
+	if [ $ABS_HAT1X -eq 0 ]; then
+		drive "LEFT" $ABS_Y
+		drive "RIGHT" $ABS_RY
+	else
+		brake "LEFT" $(($ABS_HAT1X / 2))
+		brake "RIGHT" $(($ABS_HAT1X / 2))
+	fi
+}
+
+function action_ABS_HAT2X {
+	ABS_Y=$(($ABS_HAT2X / 2))
+	drive_smart
+}
+
+function action_ABS_HAT3X {
+	ABS_Y=$((0 - $ABS_HAT2X / 2))
+	drive_smart
+}
+
+function action_ABS_HAT0Y {
+	ABS_RX=$((0 - $ABS_HAT0Y / 2))
+	drive_smart
+}
+
+function action_ABS_HAT1Y {
+	ABS_RX=$(($ABS_HAT0Y / 2))
+	drive_smart
 }
 
 function action {

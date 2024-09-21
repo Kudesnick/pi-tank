@@ -1,9 +1,9 @@
 #!/bin/bash -e
 
-export DEBUG=1
+export DEBUG=0
 
 function dbg {
-	test $DEBUG -ne 0 && echo $1
+	[[ $DEBUG -ne 0 ]] && echo $1 || true
 }
 
 FILTER_ABS=(Y Z RX RY RZ HAT1X HAT2X HAT3X HAT0Y HAT1Y)
@@ -12,11 +12,7 @@ FILTER_BTN=(SELECT START)
 # zero point
 export ZP=128
 
-MODE=0
-ABS_Y=$ZP
-ABS_Z=0
-ABS_RY=$ZP
-ABS_RZ=0
+MODE=1
 
 source ./pwm.sh
 
@@ -41,11 +37,10 @@ function calibr {
 }
 
 function drive_smart {
-	local S=$(normal $ABS_Y)
-	local T=$(normal $ABS_RX)
-
-	bridge_drive "LEFT" $(calibr $(($S - $T)) )
-	bridge_drive "RIGHT" $(calibr $(($S + $T)) )
+	local S=$(($(normal $ABS_Y) + $ABS_HAT2X / 2 - $ABS_HAT3X / 2))
+	local T=$(($(normal $ABS_RX) + $ABS_HAT1Y / 2 - $ABS_HAT0Y / 2))
+	drive_single "LEFT" $(calibr $(($S - $T)) )
+	drive_single "RIGHT" $(calibr $(($S + $T)) )
 }
 
 function drive {
@@ -62,15 +57,15 @@ function action_BTN_START {
 }
 
 function action_ABS_Z {
-	if [ $ABS_Z -eq 0 ]; then drive "LEFT" $ABS_Y; else brake "LEFT" $ABS_Z; fi
+	[[ $1 -eq 0 ]] && drive "LEFT" $ABS_Y || brake "LEFT" $1
 }
 
 function action_ABS_RZ {
-	if [ $ABS_RZ -eq 0 ]; then drive "RIGHT" $ABS_RY; else brake "RIGHT" $ABS_RZ; fi
+	[[ $1 -eq 0 ]] && drive "RIGHT" $ABS_RY || brake "RIGHT" $1
 }
 
 function action_ABS_Y {
-	if [ $ABS_Z -eq 0 ]; then drive "LEFT" $ABS_Y; fi
+	if [ $ABS_Z -eq 0 ]; then drive "LEFT" $1; fi
 }
 
 function action_ABS_RX {
@@ -78,44 +73,43 @@ function action_ABS_RX {
 }
 
 function action_ABS_RY {
-	if [ $ABS_RZ -eq 0 ] && [ $MODE -eq 0 ]; then drive "RIGHT" $ABS_RY; fi
+	if [ $ABS_RZ -eq 0 ] && [ $MODE -eq 0 ]; then drive "RIGHT" $1; fi
 }
 
 function action_ABS_HAT1X {
-	if [ $ABS_HAT1X -eq 0 ]; then
+	if [[ $1 -eq 0 ]]; then
 		drive "LEFT" $ABS_Y
 		drive "RIGHT" $ABS_RY
 	else
-		brake "LEFT" $(($ABS_HAT1X / 2))
-		brake "RIGHT" $(($ABS_HAT1X / 2))
+		brake "LEFT" $1
+		brake "RIGHT" $1
 	fi
 }
 
 function action_ABS_HAT2X {
-	ABS_Y=$(($ABS_HAT2X / 2))
 	drive_smart
 }
 
 function action_ABS_HAT3X {
-	ABS_Y=$((0 - $ABS_HAT2X / 2))
 	drive_smart
 }
 
 function action_ABS_HAT0Y {
-	ABS_RX=$((0 - $ABS_HAT0Y / 2))
 	drive_smart
 }
 
 function action_ABS_HAT1Y {
-	ABS_RX=$(($ABS_HAT0Y / 2))
 	drive_smart
 }
 
 function action {
 	while read -r DATA; do
-		eval $DATA
 		dbg $DATA
-		action_${DATA%%=*} || true
+		if [ $DEBUG -eq 0 ]; then
+			eval $DATA 2> /dev/null && action_${DATA%%=*} ${DATA%%=*} 2> /dev/null || true
+		else
+			eval $DATA && action_${DATA%%=*} ${DATA%%=*} || true
+		fi
 	done
 }
 
@@ -125,19 +119,31 @@ GREP_CHAIN=""
 
 for i in ${FILTER_ABS[*]}; do
 	GREP_CHAIN="${GREP_CHAIN} -we ABS_${i}"
+	eval "ABS_${i}=0"
 done
 
 for i in ${FILTER_BTN[*]}; do
 	GREP_CHAIN="${GREP_CHAIN} -we BTN_${i}"
+	eval "BTN_${i}=0"
 done
+
+ABS_X=$ZP
+ABS_Y=$ZP
+ABS_RX=$ZP
+ABS_RY=$ZP
 
 bridge_export "LEFT"
 bridge_export "RIGHT"
 
+export LC_ALL=C
+
 evtest /dev/input/event3 |\
-	grep --line-buffered ${GREP_CHAIN} |\
-        grep --line-buffered -o -P '\((ABS|BTN)_[A-Z0-9]+\), value [0-9]+$' |\
-	sed -u -e "s/), value /=/" -e "s/(//" | action
+    grep --line-buffered -oP '(AB|BT).+' |\
+	sed -u "s/), value /=/" | action
+
+#evtest /dev/input/event3 |\
+#    grep --line-buffered -eoP '(ABS|BTN).+' |\
+#	sed -u "s/), value /=/" | action
 
 bridge_unexport "LEFT"
 bridge_unexport "RIGHT"

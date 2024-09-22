@@ -3,7 +3,7 @@
 export DEBUG=0
 
 function dbg {
-	[[ $DEBUG -ne 0 ]] && echo $1 || true
+	if [ $DEBUG -ne 0 ]; then echo $1; fi
 }
 
 FILTER_ABS=(Y Z RX RY RZ HAT1X HAT2X HAT3X HAT0Y HAT1Y)
@@ -52,7 +52,7 @@ function action_BTN_SELECT {
 	dbg "MODE=${MODE}"
 }
 
-function action_BTN_START {
+function action__BTN_START {
 	shutdown -h now
 }
 
@@ -102,30 +102,10 @@ function action_ABS_HAT1Y {
 	drive_smart
 }
 
-function action {
-	while read -r DATA; do
-		dbg $DATA
-		if [ $DEBUG -eq 0 ]; then
-			eval $DATA 2> /dev/null && action_${DATA%%=*} ${DATA%%=*} 2> /dev/null || true
-		else
-			eval $DATA && action_${DATA%%=*} ${DATA%%=*} || true
-		fi
-	done
-}
-
 # run
 
-GREP_CHAIN=""
-
-for i in ${FILTER_ABS[*]}; do
-	GREP_CHAIN="${GREP_CHAIN} -we ABS_${i}"
-	eval "ABS_${i}=0"
-done
-
-for i in ${FILTER_BTN[*]}; do
-	GREP_CHAIN="${GREP_CHAIN} -we BTN_${i}"
-	eval "BTN_${i}=0"
-done
+for i in ${FILTER_ABS[*]}; do eval "ABS_${i}=0"; done
+for i in ${FILTER_BTN[*]}; do eval "BTN_${i}=0"; done
 
 ABS_X=$ZP
 ABS_Y=$ZP
@@ -135,15 +115,19 @@ ABS_RY=$ZP
 bridge_export "LEFT"
 bridge_export "RIGHT"
 
-export LC_ALL=C
-
-evtest /dev/input/event3 |\
-    grep --line-buffered -oP '(AB|BT).+' |\
-	sed -u "s/), value /=/" | action
-
-#evtest /dev/input/event3 |\
-#    grep --line-buffered -eoP '(ABS|BTN).+' |\
-#	sed -u "s/), value /=/" | action
+while read -r DATA; do
+	dbg $DATA
+	DATA=($DATA)
+	if [ "${DATA[9]}" == "value" ]; then
+		K=${DATA[8]:1:-2}
+		V=${DATA[10]}
+		if [ $DEBUG -eq 0 ]; then
+			eval "$K=$V" 2> /dev/null && action_${K} ${V} 2> /dev/null || true
+		else
+			eval "$K=$V" && action_${K} ${V} || true
+		fi
+	fi
+done < <(evtest /dev/input/event3)
 
 bridge_unexport "LEFT"
 bridge_unexport "RIGHT"

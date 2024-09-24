@@ -126,12 +126,12 @@ struct gpio_t {
 	int pin, fd;
 } gpio[2][2] = {
 	[LEFT] = {
-		[FORWARD] = {23, -1},
-		[BACK]    = {22, -1},
+		[FORWARD] = {17, -1},
+		[BACK]    = {18, -1},
 	},
 	[RIGHT] = {
-		[FORWARD] = {18, -1},
-		[BACK]    = {17, -1},
+		[FORWARD] = {22, -1},
+		[BACK]    = {23, -1},
 	},
 };
 
@@ -288,9 +288,6 @@ void bridge_test()
 	h_bridge_export(LEFT);
 	h_bridge_export(RIGHT);
 
-	h_bridge_brake(LEFT, 100);
-	h_bridge_brake(RIGHT, 100);
-
 	h_bridge_drive(LEFT, -20);
 	sleep(DELAY);
 
@@ -367,7 +364,7 @@ void drive_single(const enum side_t side, const int val)
 
 void drive_smart(const enum side_t side, const int val) {
 	int S = normal(get_ctl(ABS_Y)->val) + get_ctl(ABS_HAT2X)->val / 2 - get_ctl(ABS_HAT3X)->val / 2;
-	int T = normal(get_ctl(ABS_RX)->val) + get_ctl(ABS_HAT0Y)->val / 2 - get_ctl(ABS_HAT1Y)->val / 2;
+	int T = normal(get_ctl(ABS_RX)->val) - get_ctl(ABS_HAT0Y)->val / 2 + get_ctl(ABS_HAT1Y)->val / 2;
 
 	drive_single(LEFT, calibr(S - T));
 	drive_single(RIGHT, calibr(S + T));
@@ -395,7 +392,11 @@ void action_BTN_START(const enum side_t side, const int val)
 
 void action_ABS_Z(const enum side_t side, const int val)
 {
-	if (val != 0) brake(side, val); else drive(side, val);
+	if (val != 0){
+		brake(side, val);
+	}else{
+		drive(side, get_ctl((side = LEFT) ? ABS_Y : ABS_RY)->val);
+	}
 }
 
 void action_ABS_Y(const enum side_t side, const int val)
@@ -410,13 +411,8 @@ void action_ABS_RX(const enum side_t side, const int val)
 
 void action_ABS_HAT1X(const enum side_t side, const int val)
 {
-	if (val == 0) {
-		drive(LEFT, get_ctl(ABS_Y)->val);
-		drive(RIGHT, get_ctl(ABS_RY)->val);
-	}else {
-		brake(LEFT, val);
-		brake(RIGHT, val);
-	}
+	action_ABS_Z(LEFT, val);
+	action_ABS_Z(RIGHT, val);
 }
 
 static struct ctl_t ctl[] = {
@@ -478,8 +474,6 @@ static int print_events(int fd)
 
 	h_bridge_export(LEFT);
 	h_bridge_export(RIGHT);
-	h_bridge_brake(LEFT, 10);
-	h_bridge_brake(RIGHT, 10);
 
 	while (!stop) {
 		select(fd + 1, &rdfs, NULL, NULL, NULL);

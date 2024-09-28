@@ -345,6 +345,8 @@ enum mode_t {
 
 enum mode_t mode = EASY;
 
+int speed_shift = 0;
+
 struct ctl_t {
 	int code, val, side;
 	void(*func)(const enum side_t side, const int val);
@@ -367,15 +369,20 @@ void brake(const enum side_t side, const int val)
 
 void drive_single(const enum side_t side, const int val)
 {
-	h_bridge_drive(side, val);
+	h_bridge_drive(side, val >> speed_shift);
 }
 
 void drive_smart(const enum side_t side, const int val) {
 	int S = normal(get_ctl(ABS_Y)->val) + get_ctl(ABS_HAT2X)->val / 2 - get_ctl(ABS_HAT3X)->val / 2;
 	int T = normal(get_ctl(ABS_RX)->val) - get_ctl(ABS_HAT0Y)->val / 2 + get_ctl(ABS_HAT1Y)->val / 2;
 
-	drive_single(LEFT, calibr(S - T));
-	drive_single(RIGHT, calibr(S + T));
+	if (S >= 0){
+		drive_single(LEFT, calibr(S - T));
+		drive_single(RIGHT, calibr(S + T));
+	}else{
+		drive_single(LEFT, calibr(S + T));
+		drive_single(RIGHT, calibr(S - T));
+	}
 }
 
 void drive(const enum side_t side, const int val)
@@ -396,6 +403,11 @@ void action_BTN_SELECT(const enum side_t side, const int val)
 void action_BTN_START(const enum side_t side, const int val)
 {
 	if (val == 0) stop = 1;
+}
+
+void action_BTN_NORTH(const enum side_t side, const int val)
+{
+	if (val == 0 && ++speed_shift > 1) speed_shift = 0;
 }
 
 void action_ABS_Z(const enum side_t side, const int val)
@@ -437,6 +449,7 @@ static struct ctl_t ctl[] = {
 	{ABS_HAT1Y , 0  , 0    , drive_smart      },
 	{BTN_SELECT, 0  , 0    , action_BTN_SELECT},
 	{BTN_START , 0  , 0    , action_BTN_START },
+	{BTN_NORTH , 0  , 0    , action_BTN_NORTH },
 	{0, 0, 0, NULL}
 };
 

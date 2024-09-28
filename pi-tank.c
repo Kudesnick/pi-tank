@@ -35,13 +35,21 @@ static int open_try(const char *filename, int flags)
 {
 	int fd;
 
-	if ((fd = open(filename, flags)) < 0) {
-		perror("pi-tank");
-		if (errno == EACCES && getuid() != 0)
-			fprintf(stderr,
-				"You do not have access to %s. Try running as root instead.\n",
-				filename);
+	// if the file was just created then the udev-rules have not yet been applied to it
+	for(int try = (getuid() != 0) ? 10 : 1; try > 0; try--){
+		if ((fd = open(filename, flags)) >= 0) return fd;
+		if (errno == EACCES && getuid() != 0) usleep(100000);
 	}
+
+	perror("pi-tank");
+	if (errno == EACCES && getuid() != 0)
+		fprintf(stderr,
+			"You do not have access to %s. Try running as root instead.\n",
+			filename);
+	else
+		fprintf(stderr,
+			"You do not have access to %s. Undefined error.\n",
+			filename);
 
 	return fd;
 }
@@ -395,7 +403,7 @@ void action_ABS_Z(const enum side_t side, const int val)
 	if (val != 0){
 		brake(side, val);
 	}else{
-		drive(side, get_ctl((side = LEFT) ? ABS_Y : ABS_RY)->val);
+		drive(side, get_ctl((side == LEFT) ? ABS_Y : ABS_RY)->val);
 	}
 }
 

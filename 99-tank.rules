@@ -1,0 +1,5 @@
+# Sony PLAYSTATION(R)3 Controller detector
+# if ATTRS{properties}=="40" then "Sony PLAYSTATION(R)3 Controller Motion Sensors" detected 
+SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", \
+	ATTRS{id/vendor}=="054c", ATTRS{id/product}=="0268", ATTRS{properties}=="0", \
+	PROGRAM="/bin/bash -c 'echo pi-tank /dev/input/$kernel \&\> /dev/tty1 | at now'"
